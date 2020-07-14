@@ -158,7 +158,9 @@ int encodeSLCAN(const Message& can_msg, SLCanMsg* slcan_msg_out)
 SLCANGateway::SLCANGateway(std::string canbus_dev):
   canbus_dev_(canbus_dev),
   is_connected_(false),
-  io_service_()
+  io_service_(),
+  mcu_endpoint_(address::from_string("192.168.131.2"), CAN_PORT),
+  local_endpoint_(address::from_string("192.168.131.1"), CAN_PORT)
 {
   socket_ = NULL;
   write_frames_index_ = 0;
@@ -176,14 +178,11 @@ bool SLCANGateway::connect()
     socket_ = new boost::asio::ip::udp::socket(io_service_);
 
     // connect to the remote endpoint
-    endpoint_ = udp::endpoint(address::from_string(canbus_dev_), CAN_PORT);
-    socket_->connect(endpoint_, remote_err);
+    socket_->open(udp::v4());
+    socket_->bind(local_endpoint_, local_err);
 
-    // connect to the local endpoint
-    //socket_->bind(udp::endpoint(boost::asio::ip::address_v4::any(), CAN_PORT), local_err);
-
-    is_connected_ = //local_err == boost::system::errc::success &&
-                    remote_err == boost::system::errc::success;
+    is_connected_ = local_err == boost::system::errc::success;// &&
+                    //remote_err == boost::system::errc::success;
 
     return is_connected_;
 }
@@ -201,11 +200,10 @@ bool SLCANGateway::recv(Message* msg)
   try
   {
     io_service_.run_one();
-    size_t nAvailable = socket_->available();
     
-    if (nAvailable >= sizeof(SLCanMsg) && socket_->receive_from(boost::asio::buffer(&slCanMsg, sizeof(SLCanMsg)), endpoint_, 0, err) == sizeof(SLCanMsg))
+    if (socket_->receive_from(boost::asio::buffer(&slCanMsg, sizeof(SLCanMsg)), mcu_endpoint_, 0, err) == sizeof(SLCanMsg))
     {
-      ROS_ERROR("Bytes available: %d", nAvailable);
+      ROS_ERROR("SUCCESS!");
       decodeSLCAN(slCanMsg, msg);
       return true;
     }
@@ -251,7 +249,7 @@ bool SLCANGateway::sendAllQueued()
     encodeSLCAN(write_frames_[i], &request);
 
     boost::system::error_code err;
-    auto sent = socket_->send_to(boost::asio::buffer(&request, sizeof(request)), endpoint_, 0, err);
+    auto sent = socket_->send_to(boost::asio::buffer(&request, sizeof(request)), mcu_endpoint_, 0, err);
     // **WARNING* 
     // Return Result Ignored on other implementations
   }
