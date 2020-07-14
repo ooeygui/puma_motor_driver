@@ -179,6 +179,9 @@ bool SLCANGateway::connect()
 
     // connect to the remote endpoint
     socket_->open(udp::v4());
+    boost::asio::socket_base::reuse_address option(true);
+    socket_->set_option(option);
+
     socket_->bind(local_endpoint_, local_err);
 
     is_connected_ = local_err == boost::system::errc::success;// &&
