@@ -59,6 +59,9 @@ public:
 
 private:
   
+  void recv_handler(
+    const boost::system::error_code &err, std::size_t bytes_transferred);
+
   std::string canbus_dev_;  // CAN interface ID
   bool is_connected_;
 
@@ -68,6 +71,9 @@ private:
   boost::asio::ip::udp::endpoint mcu_endpoint_, local_endpoint_;
   Message write_frames_[1024];
   int write_frames_index_;
+
+  SLCanMsg slCanMsg_;
+  Message msg_;
 };
 
 }  // namespace puma_motor_driver

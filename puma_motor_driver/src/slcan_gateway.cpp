@@ -184,42 +184,33 @@ bool SLCANGateway::connect()
     is_connected_ = local_err == boost::system::errc::success;// &&
                     //remote_err == boost::system::errc::success;
 
+    socket_thread_ = boost::thread(boost::bind(&boost::asio::io_context::run, &io_service_));
+    socket_->async_receive_from(boost::asio::buffer(&msg_, sizeof(Message)), mcu_endpoint_, 
+      std::bind(&SLCANGateway::recv_handler, this, std::placeholders::_1, std::placeholders::_2));
+
     return is_connected_;
 }
-
 
 bool SLCANGateway::isConnected()
 {
   return is_connected_;
 }
 
+void SLCANGateway::recv_handler(const boost::system::error_code &err, std::size_t bytes_transferred)
+{
+  if(bytes_transferred >= sizeof(Message))
+  {
+   decodeSLCAN(slCanMsg_, &msg_);
+  }
+  else
+  {
+    ROS_ERROR("Not enough data read! %d", bytes_transferred);
+  }
+}
+
 bool SLCANGateway::recv(Message* msg)
 {
-  SLCanMsg slCanMsg;
-  boost::system::error_code err;
-  try
-  {
-    io_service_.run_one();
-    
-    if (socket_->receive_from(boost::asio::buffer(&slCanMsg, sizeof(SLCanMsg)), mcu_endpoint_, 0, err) == sizeof(SLCanMsg))
-    {
-      ROS_ERROR("SUCCESS!");
-      decodeSLCAN(slCanMsg, msg);
-      return true;
-    }
-  }
-  catch(boost::system::system_error err)
-  {
-    ROS_ERROR("Boost error %s", err.what());
-    return false;
-  }
-  catch(...)
-  {
-    ROS_ERROR("Something died :/");
-    return false;
-  }
-
-  return false;
+  return true;
 }
 
 void SLCANGateway::queue(const Message& msg)
