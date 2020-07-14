@@ -37,6 +37,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 using boost::asio::ip::udp;
 using boost::asio::ip::address;
 
+#define CAN_PORT    11412
+
 namespace puma_motor_driver
 {
 
@@ -155,16 +157,35 @@ int encodeSLCAN(const Message& can_msg, SLCanMsg* slcan_msg_out)
 
 SLCANGateway::SLCANGateway(std::string canbus_dev):
   canbus_dev_(canbus_dev),
-  is_connected_(false)
+  is_connected_(false),
+  io_service_()
 {
+  socket_ = NULL;
+  write_frames_index_ = 0;
 }
 
 bool SLCANGateway::connect()
 {
-    socket_ = new boost::asio::ip::udp::socket(io_service_);
-    endpoint_ = udp::endpoint(address::from_string(canbus_dev_), 11412);
+  if(socket_ != NULL)
+  {
+    socket_->close();
+    delete socket_;
+  }
 
-    socket_thread_ = boost::thread(boost::bind(&boost::asio::io_service::run, &io_service_));
+    boost::system::error_code local_err, remote_err;
+    socket_ = new boost::asio::ip::udp::socket(io_service_);
+
+    // connect to the remote endpoint
+    endpoint_ = udp::endpoint(address::from_string(canbus_dev_), CAN_PORT);
+    socket_->connect(endpoint_, remote_err);
+
+    // connect to the local endpoint
+    //socket_->bind(udp::endpoint(boost::asio::ip::address_v4::any(), CAN_PORT), local_err);
+
+    is_connected_ = //local_err == boost::system::errc::success &&
+                    remote_err == boost::system::errc::success;
+
+    return is_connected_;
 }
 
 
@@ -176,9 +197,28 @@ bool SLCANGateway::isConnected()
 bool SLCANGateway::recv(Message* msg)
 {
   SLCanMsg slCanMsg;
-  if (socket_->receive(boost::asio::buffer(&slCanMsg, sizeof(SLCanMsg))))
+  boost::system::error_code err;
+  try
   {
-    decodeSLCAN(slCanMsg, msg);
+    io_service_.run_one();
+    size_t nAvailable = socket_->available();
+    
+    if (nAvailable >= sizeof(SLCanMsg) && socket_->receive_from(boost::asio::buffer(&slCanMsg, sizeof(SLCanMsg)), endpoint_, 0, err) == sizeof(SLCanMsg))
+    {
+      ROS_ERROR("Bytes available: %d", nAvailable);
+      decodeSLCAN(slCanMsg, msg);
+      return true;
+    }
+  }
+  catch(boost::system::system_error err)
+  {
+    ROS_ERROR("Boost error %s", err.what());
+    return false;
+  }
+  catch(...)
+  {
+    ROS_ERROR("Something died :/");
+    return false;
   }
 
   return false;

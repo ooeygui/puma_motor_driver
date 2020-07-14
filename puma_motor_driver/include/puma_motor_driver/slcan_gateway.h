@@ -34,6 +34,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 namespace puma_motor_driver
 {
 
+#pragma pack(push, 1)
 struct SLCanMsg
 {
   char type;
@@ -42,6 +43,7 @@ struct SLCanMsg
   char data[16];
   char delim;
 };
+#pragma pack(pop)
 
 class SLCANGateway : public Gateway
 {

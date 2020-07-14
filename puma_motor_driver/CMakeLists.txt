@@ -34,6 +34,8 @@ add_library(puma_motor_driver
   src/diagnostic_updater.cpp
 )
 
+add_compile_options(/Od)
+
 target_link_libraries(puma_motor_driver
   ${catkin_LIBRARIES}
 )
